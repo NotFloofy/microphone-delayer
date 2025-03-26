@@ -1,208 +1,111 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>mic delay with realtime effects</title>
-  <style>
-    body {
-      background: #1e1e2e;
-      color: #cdd6f4;
-      font-family: arial, sans-serif;
-      text-align: center;
-      padding: 20px;
-    }
-    .hidden { display: none }
-    button, input {
-      background: #6272a4;
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      margin: 10px;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-    button:hover {
-      background: #7689c5;
-    }
-    input[type="number"],
-    input[type="range"] {
-      background: #313244;
-      text-align: center;
-      width: 80px;
-    }
-    .error-box {
-      background: #ff5555;
-      padding: 15px;
-      margin-top: 20px;
-      border-radius: 5px;
-      display: none;
-    }
-    .slider-label {
-      margin-top: 10px;
-      display: block;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mic delay</title>
+    <style>
+        body {
+            background: #1e1e2e;
+            color: #cdd6f4;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        .hidden { display: none; }
+        button, input {
+            background: #6272a4;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: #7689c5;
+        }
+        input {
+            background: #313244;
+            text-align: center;
+            width: 80px;
+        }
+        .error-box {
+            background: #ff5555;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
 </head>
 <body>
 
-  <div id="start">
-    <h1>enable microphone</h1>
-    <button onclick="startMic()">enable mic</button>
-    <div class="error-box" id="errorBox">
-      <p id="errorMsg"></p>
-      <button onclick="closeError()">okie</button>
+    <div id="start">
+        <h1>enable microphone</h1>
+        <button onclick="startMic()">enable mic</button>
+        <div class="error-box" id="errorBox">
+            <p id="errorMsg"></p>
+            <button onclick="closeError()">okie</button>
+        </div>
     </div>
-  </div>
 
-  <div id="menu" class="hidden">
-    <h1>mic delay tester</h1>
-    <p id="micStatus">microphone accessed</p>
-    <button onclick="setDelay(150)">150ms delay</button>
-    <button onclick="setDelay(300)">300ms delay</button>
-    <button onclick="setDelay(500)">500ms delay</button>
-    <input type="number" id="customDelay" placeholder="ms" min="0">
-    <button onclick="setCustomDelay()">custom delay</button>
-    <div>
-      <label class="slider-label">voice changer</label>
-      <input type="checkbox" id="voiceChangerToggle" onchange="toggleVoiceChanger()">
+    <div id="menu" class="hidden">
+        <h1>mic delay tester</h1>
+        <p id="micStatus">microphone accessed</p>
+        <button onclick="setDelay(150)">150ms delay</button>
+        <button onclick="setDelay(300)">300ms delay</button>
+        <button onclick="setDelay(500)">500ms delay</button>
+        <input type="number" id="customDelay" placeholder="ms" min="0">
+        <button onclick="setCustomDelay()">custom delay</button>
+        <button onclick="stopMic()">disable mic</button>
     </div>
-    <div id="pitchControl" style="display:none">
-      <label class="slider-label">pitch shift (-12 to 12 semitones)</label>
-      <input type="range" id="pitchSlider" min="-12" max="12" value="0" oninput="updatePitch(this.value)">
-    </div>
-    <div>
-      <label class="slider-label">autotune effect</label>
-      <input type="checkbox" id="autotuneToggle" onchange="updateAutotune()">
-    </div>
-    <button onclick="stopMic()">disable mic</button>
-  </div>
 
-  <script>
-    // init audio vars
-    let audioCtx, source, stream, delayNode, pitchNode
-    let pitchFactor = 1
-    let useVoiceChanger = false
+    <script>
+        let audioCtx, source, stream, delayNode;
 
-    async function startMic() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({audio:true})
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-        source = audioCtx.createMediaStreamSource(stream)
-        delayNode = audioCtx.createDelay(5)
-
-        // create audio worklet node for pitch shifting
-        // worklet code as a string
-        const workletCode = `
-          class pitchShiftProcessor extends AudioWorkletProcessor {
-            constructor() {
-              super()
-              this.pitchFactor = 1.0
-              this.autotune = false
-              this.port.onmessage = (e) => {
-                if (e.data.pitchFactor !== undefined) {
-                  this.pitchFactor = e.data.pitchFactor
-                }
-                if (e.data.autotune !== undefined) {
-                  this.autotune = e.data.autotune
-                }
-              }
+        async function startMic() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                source = audioCtx.createMediaStreamSource(stream);
+                delayNode = audioCtx.createDelay(5);
+                source.connect(delayNode);
+                delayNode.connect(audioCtx.destination);
+                document.getElementById("start").classList.add("hidden");
+                document.getElementById("menu").classList.remove("hidden");
+            } catch (err) {
+                document.getElementById("errorMsg").textContent = "error: " + err.message;
+                document.getElementById("errorBox").style.display = "block";
             }
-            process(inputs, outputs) {
-              const input = inputs[0][0]
-              const output = outputs[0][0]
-              if (input) {
-                for (let i = 0; i < input.length; i++) {
-                  let sample = input[i]
-                  // simulate pitch shift by multiplying sample
-                  if (this.pitchFactor !== 1.0) {
-                    sample *= this.pitchFactor
-                  }
-                  // simulate autotune by compressing dynamic range
-                  if (this.autotune) {
-                    sample = Math.tanh(sample)
-                  }
-                  output[i] = sample
-                }
-              }
-              return true
+        }
+
+        function setDelay(ms) {
+            if (delayNode) {
+                delayNode.delayTime.setValueAtTime(ms / 1000, audioCtx.currentTime);
             }
-          }
-          registerProcessor('pitch-shift-processor', pitchShiftProcessor)
-        `
-        // create blob url for worklet module
-        const blob = new Blob([workletCode], { type: 'application/javascript' })
-        const blobURL = URL.createObjectURL(blob)
-        await audioCtx.audioWorklet.addModule(blobURL)
-        pitchNode = new AudioWorkletNode(audioCtx, 'pitch-shift-processor')
-        // initial parameters
-        pitchNode.port.postMessage({ pitchFactor: pitchFactor, autotune: document.getElementById('autotuneToggle').checked })
+        }
 
-        // connect nodes: source -> delay -> pitch -> destination
-        source.connect(delayNode)
-        delayNode.connect(pitchNode)
-        pitchNode.connect(audioCtx.destination)
+        function setCustomDelay() {
+            let ms = document.getElementById("customDelay").value;
+            if (ms && delayNode) {
+                delayNode.delayTime.setValueAtTime(ms / 1000, audioCtx.currentTime);
+            }
+        }
 
-        document.getElementById("start").classList.add("hidden")
-        document.getElementById("menu").classList.remove("hidden")
-      } catch (err) {
-        document.getElementById("errorMsg").textContent = "error: " + err.message
-        document.getElementById("errorBox").style.display = "block"
-      }
-    }
+        function stopMic() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            document.getElementById("menu").classList.add("hidden");
+            document.getElementById("start").classList.remove("hidden");
+        }
 
-    function setDelay(ms) {
-      if (delayNode) {
-        delayNode.delayTime.setValueAtTime(ms / 1000, audioCtx.currentTime)
-      }
-    }
-
-    function setCustomDelay() {
-      let ms = document.getElementById("customDelay").value
-      if (ms && delayNode) {
-        delayNode.delayTime.setValueAtTime(ms / 1000, audioCtx.currentTime)
-      }
-    }
-
-    function toggleVoiceChanger() {
-      useVoiceChanger = document.getElementById("voiceChangerToggle").checked
-      document.getElementById("pitchControl").style.display = useVoiceChanger ? "block" : "none"
-      // if voice changer off, reset pitch
-      if (!useVoiceChanger) {
-        pitchFactor = 1
-        document.getElementById("pitchSlider").value = 0
-        if (pitchNode) pitchNode.port.postMessage({ pitchFactor: pitchFactor })
-      }
-    }
-
-    function updatePitch(val) {
-      // convert semitones to factor (2^(n/12))
-      pitchFactor = Math.pow(2, val / 12)
-      if (pitchNode) {
-        pitchNode.port.postMessage({ pitchFactor: pitchFactor })
-      }
-    }
-
-    function updateAutotune() {
-      let autotune = document.getElementById("autotuneToggle").checked
-      if (pitchNode) {
-        pitchNode.port.postMessage({ autotune: autotune })
-      }
-    }
-
-    function stopMic() {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
-      }
-      document.getElementById("menu").classList.add("hidden")
-      document.getElementById("start").classList.remove("hidden")
-    }
-
-    function closeError() {
-      document.getElementById("errorBox").style.display = "none"
-    }
-  </script>
+        function closeError() {
+            document.getElementById("errorBox").style.display = "none";
+        }
+    </script>
 
 </body>
 </html>
